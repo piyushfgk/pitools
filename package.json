@@ -1,8 +1,9 @@
 {
   "name": "@psachan/pitools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP Server with various tools including web search.",
   "main": "dist/index.js",
+  "bin": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
