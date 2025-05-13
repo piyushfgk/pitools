@@ -1,6 +1,6 @@
 {
   "name": "@psachan/pitools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP Server with various tools including web search and LinkedIn posting.",
   "main": "dist/index.js",
   "bin": "dist/index.js",

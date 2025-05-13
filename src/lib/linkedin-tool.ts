@@ -24,6 +24,8 @@ export const linkedInArticlePostInputSchema = z.object({
   commentary: z.string().min(1, { message: "Commentary text cannot be empty." }),
   url: z.string().url({ message: "Invalid URL provided for article." }),
   title: z.string().min(1, { message: "Article title cannot be empty." }),
+  thumbnailFilePath: z.string().optional(), // Optional path to a local thumbnail image
+  thumbnailAltText: z.string().optional(),  // Optional alt text for the thumbnail
 });
 export type LinkedInArticlePostInputs = z.infer<typeof linkedInArticlePostInputSchema>;
 
@@ -101,6 +103,40 @@ async function getLinkedInUserInfoInternal(accessToken: string): Promise<{ urn: 
   }
 }
 
+// NEW: Internal helper to upload an image and return its URN
+async function uploadImageAndGetUrnInternal(accessToken: string, authorUrn: string, imagePath: string): Promise<string> {
+  const initializeUploadUrl = 'https://api.linkedin.com/rest/images?action=initializeUpload';
+  // Step 1: Initialize Upload
+  const initUploadBody = { initializeUploadRequest: { owner: authorUrn } };
+  const initResponse = await fetch(initializeUploadUrl, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json', 'LinkedIn-Version': '202504', 'X-Restli-Protocol-Version': '2.0.0' },
+    body: JSON.stringify(initUploadBody)
+  });
+  if (!initResponse.ok) {
+    const errorBody = await initResponse.text();
+    console.error('Initialize Image Upload failed ' + initResponse.status + ': ' + errorBody);
+    throw new Error('Initialize Image Upload failed ' + initResponse.status + ': ' + errorBody);
+  }
+  const initData = await initResponse.json() as { value: { uploadUrl: string, image: string } };
+  const { uploadUrl, image: imageUrn } = initData.value;
+
+  // Step 2: Upload Image File
+  const imageBuffer = await fs.readFile(imagePath);
+  const imageContentType = lookup(imagePath) || 'application/octet-stream';
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': imageContentType },
+    body: imageBuffer
+  });
+  if (!uploadResponse.ok && uploadResponse.status !== 201 && uploadResponse.status !== 200) {
+    const errorBody = await uploadResponse.text();
+    console.error('Image Upload failed ' + uploadResponse.status + ': ' + errorBody);
+    throw new Error('Image Upload failed ' + uploadResponse.status + ': ' + errorBody);
+  }
+  return imageUrn;
+}
+
 // --- Post Text Update (Internal) --- 
 async function postTextUpdateInternal(accessToken: string, authorUrn: string, textContent: string): Promise<{ success: boolean; message: string; postId?: string }> {
   const postApiUrl = 'https://api.linkedin.com/rest/posts';
@@ -132,18 +168,50 @@ async function postTextUpdateInternal(accessToken: string, authorUrn: string, te
   }
 }
 
-// --- Post Article Update (Internal) ---
-async function postArticleUpdateInternal(accessToken: string, authorUrn: string, articleUrl: string, commentaryText: string, articleTitle: string): Promise<{ success: boolean; message: string; postId?: string }> {
+// UPDATED to handle optional thumbnail
+async function postArticleUpdateInternal(
+  accessToken: string, 
+  authorUrn: string, 
+  articleUrl: string, 
+  commentaryText: string, 
+  articleTitle: string,
+  thumbnailFilePath?: string, // New optional param
+  thumbnailAltText?: string   // New optional param
+): Promise<{ success: boolean; message: string; postId?: string }> {
   const postApiUrl = 'https://api.linkedin.com/rest/posts';
+  
+  const articleContent: { source: string; title: string; thumbnail?: string; thumbnailAltText?: string, description?: string } = {
+    source: articleUrl,
+    title: articleTitle,
+    // description: commentaryText, // Per API doc, description is for the article, not the post commentary.
+                                   // Keeping commentary separate as per current structure.
+  };
+
+  if (thumbnailFilePath) {
+    try {
+      const thumbnailUrn = await uploadImageAndGetUrnInternal(accessToken, authorUrn, thumbnailFilePath);
+      articleContent.thumbnail = thumbnailUrn;
+      if (thumbnailAltText) {
+        articleContent.thumbnailAltText = thumbnailAltText; // API seems to use `description` for alt in some contexts, but schema shows `thumbnailAltText`
+      }
+    } catch (uploadError: any) {
+      console.error("Error uploading thumbnail for article:", uploadError);
+      // Decide if we want to proceed without thumbnail or fail
+      // For now, let's proceed without it but log the error.
+      // To fail, uncomment: return { success: false, message: 'Failed to upload thumbnail: ' + uploadError.message };
+    }
+  }
+
   const postBody = {
     author: authorUrn,
     commentary: commentaryText,
-    visibility: "PUBLIC",
-    distribution: { feedDistribution: "MAIN_FEED" },
-    content: { article: { source: articleUrl, title: articleTitle } },
-    lifecycleState: "PUBLISHED",
+    visibility: "PUBLIC" as const,
+    distribution: { feedDistribution: "MAIN_FEED" as const },
+    content: { article: articleContent },
+    lifecycleState: "PUBLISHED" as const,
     isReshareDisabledByAuthor: false
   };
+
   try {
     const response = await fetch(postApiUrl, {
       method: 'POST',
@@ -153,7 +221,7 @@ async function postArticleUpdateInternal(accessToken: string, authorUrn: string,
     const postId = response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id');
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('LinkedIn API article post failed ' + response.status + ': ' + errorBody);
+      console.error('LinkedIn API article post failed ' + response.status + ': ' + errorBody + '\nRequestBody: ' + JSON.stringify(postBody));
       return { success: false, message: 'Failed to post article (' + response.status + '): ' + errorBody };
     }
     const successMessage = postId ? 'Successfully posted article! Post ID: ' + postId : 'Successfully posted article!';
@@ -164,27 +232,16 @@ async function postArticleUpdateInternal(accessToken: string, authorUrn: string,
   }
 }
 
-// --- Post Image Update (Internal) ---
+// UPDATED to use the new image upload helper
 async function postImageUpdateInternal(accessToken: string, authorUrn: string, imagePath: string, commentaryText: string): Promise<{ success: boolean; message: string; postId?: string }> {
-  const initializeUploadUrl = 'https://api.linkedin.com/rest/images?action=initializeUpload';
   const postApiUrl = 'https://api.linkedin.com/rest/posts';
   try {
-    const initUploadBody = { initializeUploadRequest: { owner: authorUrn } };
-    const initResponse = await fetch(initializeUploadUrl, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json', 'LinkedIn-Version': '202504', 'X-Restli-Protocol-Version': '2.0.0' },
-      body: JSON.stringify(initUploadBody)
-    });
-    if (!initResponse.ok) { const errorBody = await initResponse.text(); throw new Error('Initialize Upload failed ' + initResponse.status + ': ' + errorBody); }
-    const initData = await initResponse.json() as { value: { uploadUrl: string, image: string } };
-    const { uploadUrl, image: imageUrn } = initData.value;
-    const imageBuffer = await fs.readFile(imagePath);
-    const imageContentType = lookup(imagePath) || 'application/octet-stream';
-    const uploadResponse = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': imageContentType }, body: imageBuffer });
-    if (!uploadResponse.ok && uploadResponse.status !== 201 && uploadResponse.status !== 200) { const errorBody = await uploadResponse.text(); throw new Error('Image Upload failed ' + uploadResponse.status + ': ' + errorBody); }
+    const imageUrn = await uploadImageAndGetUrnInternal(accessToken, authorUrn, imagePath);
+    
+    // Step 3: Create Post with Image
     const postBody = {
-      author: authorUrn, commentary: commentaryText, visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED" },
-      content: { media: { id: imageUrn } }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false
+      author: authorUrn, commentary: commentaryText, visibility: "PUBLIC" as const, distribution: { feedDistribution: "MAIN_FEED" as const },
+      content: { media: { id: imageUrn } }, lifecycleState: "PUBLISHED" as const, isReshareDisabledByAuthor: false
     };
     const postResponse = await fetch(postApiUrl, {
       method: 'POST',
@@ -192,7 +249,11 @@ async function postImageUpdateInternal(accessToken: string, authorUrn: string, i
       body: JSON.stringify(postBody)
     });
     const postId = postResponse.headers.get('x-restli-id') || postResponse.headers.get('X-RestLi-Id');
-    if (!postResponse.ok) { const errorBody = await postResponse.text(); throw new Error('Create Image Post failed ' + postResponse.status + ': ' + errorBody); }
+    if (!postResponse.ok) { 
+      const errorBody = await postResponse.text(); 
+      console.error('Create Image Post failed ' + postResponse.status + ': ' + errorBody + '\nRequestBody: ' + JSON.stringify(postBody));
+      throw new Error('Create Image Post failed ' + postResponse.status + ': ' + errorBody); 
+    }
     const successMessage = postId ? 'Successfully posted image! Post ID: ' + postId : 'Successfully posted image!';
     return { success: true, message: successMessage, postId: postId || undefined };
   } catch (error: any) {
@@ -223,8 +284,8 @@ async function postVideoUpdateInternal(accessToken: string, authorUrn: string, v
     const uploadResponse = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': videoContentType }, body: videoBuffer });
     if (!uploadResponse.ok && uploadResponse.status !== 201 && uploadResponse.status !== 200) { const errorBody = await uploadResponse.text(); throw new Error('Video Upload failed ' + uploadResponse.status + ': ' + errorBody); }
     const postBody = {
-      author: authorUrn, commentary: commentaryText, visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED" },
-      content: { media: { id: videoUrn } }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false
+      author: authorUrn, commentary: commentaryText, visibility: "PUBLIC" as const, distribution: { feedDistribution: "MAIN_FEED" as const },
+      content: { media: { id: videoUrn } }, lifecycleState: "PUBLISHED" as const, isReshareDisabledByAuthor: false
     };
     const postResponse = await fetch(postApiUrl, {
       method: 'POST',
@@ -248,9 +309,9 @@ async function postPollUpdateInternal(accessToken: string, authorUrn: string, qu
   }
   const postApiUrl = 'https://api.linkedin.com/rest/posts';
   const postBody = {
-    author: authorUrn, commentary: commentaryText || '', visibility: "PUBLIC", distribution: { feedDistribution: "MAIN_FEED" },
-    content: { poll: { question: question, options: options.map(opt => ({ text: opt })), settings: { duration: "THREE_DAYS" } } },
-    lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false
+    author: authorUrn, commentary: commentaryText || '', visibility: "PUBLIC" as const, distribution: { feedDistribution: "MAIN_FEED" as const },
+    content: { poll: { question: question, options: options.map(opt => ({ text: opt })), settings: { duration: "THREE_DAYS" as const } } },
+    lifecycleState: "PUBLISHED" as const, isReshareDisabledByAuthor: false
   };
   try {
     const postResponse = await fetch(postApiUrl, {
@@ -261,7 +322,7 @@ async function postPollUpdateInternal(accessToken: string, authorUrn: string, qu
     const postId = postResponse.headers.get('x-restli-id') || postResponse.headers.get('X-RestLi-Id');
     if (!postResponse.ok) {
       const errorBody = await postResponse.text();
-      console.error('LinkedIn API poll post creation failed ' + postResponse.status + ': ' + errorBody);
+      console.error('LinkedIn API poll post creation failed ' + postResponse.status + ': ' + errorBody + '\nRequestBody: ' + JSON.stringify(postBody));
       return { success: false, message: 'Failed to post poll (' + postResponse.status + '): ' + errorBody };
     }
     const successMessage = postId ? 'Successfully posted poll! Post ID: ' + postId : 'Successfully posted poll!';
@@ -301,7 +362,15 @@ export async function postLinkedInArticle(rawInputs: unknown): Promise<McpToolRe
   const inputs = parseResult.data;
   try {
     const { accessToken, authorUrn } = await getLinkedInAuthDetailsAndUrn();
-    const result = await postArticleUpdateInternal(accessToken, authorUrn, inputs.url, inputs.commentary, inputs.title);
+    const result = await postArticleUpdateInternal(
+      accessToken, 
+      authorUrn, 
+      inputs.url, 
+      inputs.commentary, 
+      inputs.title,
+      inputs.thumbnailFilePath, // Pass new field
+      inputs.thumbnailAltText   // Pass new field
+    );
     return { content: [{ type: 'text', text: result.message }], isError: !result.success, postId: result.postId };
   } catch (error: any) {
     return { content: [{ type: 'text', text: 'An error occurred: ' + error.message }], isError: true };

@@ -81,6 +81,8 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (re
   - `commentary` (string, required): Text to accompany the article.
   - `url` (string, required): The URL of the article to share.
   - `title` (string, required): The title of the article.
+  - `thumbnailFilePath` (string, optional): Local path to an image to use as the article thumbnail.
+  - `thumbnailAltText` (string, optional): Alt text for the custom thumbnail image.
 
 - `linkedin_post_image`: Posts an image with commentary to LinkedIn from a local file path.
   - `commentary` (string, required): Text to accompany the image.
