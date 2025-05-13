@@ -1,7 +1,7 @@
 {
   "name": "@psachan/pitools",
-  "version": "0.1.1",
-  "description": "MCP Server with various tools including web search.",
+  "version": "0.2.0",
+  "description": "MCP Server with various tools including web search and LinkedIn posting.",
   "main": "dist/index.js",
   "bin": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,17 +15,21 @@
     "mcp",
     "pitools",
     "web-search",
-    "duckduckgo"
+    "duckduckgo",
+    "linkedin"
   ],
   "author": "psachan",
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.1",
+    "@types/mime-types": "^2.1.4",
     "duck-duck-scrape": "^2.2.7",
+    "mime-types": "^3.0.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^18.17.0",
+    "dotenv": "^16.5.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.1.6"
   },
@@ -35,4 +39,4 @@
   "publishConfig": {
     "access": "public"
   }
-} 
+}
