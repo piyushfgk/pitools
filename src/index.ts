@@ -25,6 +25,13 @@ import {
   postLinkedInPoll
 } from './lib/linkedin-tool';
 
+// Import the Instagram tool components
+import { 
+  instagramPostImageInputSchema, 
+  InstagramPostImageInput, 
+  postInstagramImage 
+} from './lib/instagram-tool';
+
 // Global Error Handlers for better diagnostics
 process.on('unhandledRejection', (reason: any, promise) => {
   console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
@@ -108,6 +115,16 @@ server.tool(
   linkedInPollPostInputSchema.shape,
   async (inputs: LinkedInPollPostInputs) => {
     return postLinkedInPoll(inputs);
+  }
+);
+
+// Register Instagram Image Post tool
+server.tool(
+  "instagram_post_image",
+  "Posts an image to Instagram from a publicly accessible URL with an optional caption.",
+  instagramPostImageInputSchema.shape,
+  async (inputs: InstagramPostImageInput) => {
+    return postInstagramImage(inputs);
   }
 );
 

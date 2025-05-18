@@ -43,7 +43,7 @@ No tab-switching, no outdated info, no manual research or posting.
 
 Go to: `Settings` → `Cursor Settings` → `MCP` → `Add new global MCP server`
 
-Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (replace the path if needed). Make sure to replace `YOUR_LINKEDIN_ACCESS_TOKEN` with your actual token.
+Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (replace the path if needed). Make sure to replace `YOUR_LINKEDIN_ACCESS_TOKEN`, `YOUR_INSTAGRAM_ACCESS_TOKEN`, and `YOUR_INSTAGRAM_USER_ID_FOR_POSTING` with your actual credentials.
 
 ```json
 {
@@ -52,7 +52,9 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (re
       "command": "npx",
       "args": ["-y", "@psachan/pitools@latest"],
       "env": {
-        "LINKEDIN_ACCESS_TOKEN": "YOUR_LINKEDIN_ACCESS_TOKEN"
+        "LINKEDIN_ACCESS_TOKEN": "YOUR_LINKEDIN_ACCESS_TOKEN",
+        "INSTAGRAM_ACCESS_TOKEN": "YOUR_INSTAGRAM_ACCESS_TOKEN",
+        "INSTAGRAM_USER_ID_FOR_POSTING": "YOUR_INSTAGRAM_USER_ID_FOR_POSTING"
       }
     }
   }
@@ -60,7 +62,7 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (re
 ```
 
 - You can also use `bunx` or `pnpm dlx` if you prefer.
-- If you prefer to set the `LINKEDIN_ACCESS_TOKEN` as a system-wide environment variable, you can omit the `env` block here, but ensure the variable is accessible to the npx command.
+- If you prefer to set the environment variables system-wide, you can omit the `env` block here, but ensure they are accessible to the npx command.
 
 ---
 
@@ -97,6 +99,10 @@ Paste the following configuration into your Cursor `~/.cursor/mcp.json` file (re
   - `pollQuestion` (string, required): The question for the poll.
   - `pollOptions` (array of strings, required): 2 to 4 options for the poll.
 
+- `instagram_post_image`: Posts an image to Instagram from a publicly accessible URL with an optional caption.
+  - `imageUrl` (string, required): Publicly accessible URL of the image to post.
+  - `caption` (string, optional): Text to accompany the image.
+
 *(More tools coming soon!)*
 
 ---
@@ -117,7 +123,7 @@ npm run build
 
 ### Local Configuration Example
 
-Make sure to replace `YOUR_LINKEDIN_ACCESS_TOKEN` with your actual token if testing LinkedIn features.
+Make sure to replace tokens and IDs with your actual credentials if testing features.
 
 ```json
 {
@@ -126,7 +132,9 @@ Make sure to replace `YOUR_LINKEDIN_ACCESS_TOKEN` with your actual token if test
       "command": "npx",
       "args": ["tsx", "/path/to/folder/pitools/src/index.ts"],
       "env": {
-        "LINKEDIN_ACCESS_TOKEN": "YOUR_LINKEDIN_ACCESS_TOKEN"
+        "LINKEDIN_ACCESS_TOKEN": "YOUR_LINKEDIN_ACCESS_TOKEN",
+        "INSTAGRAM_ACCESS_TOKEN": "YOUR_INSTAGRAM_ACCESS_TOKEN",
+        "INSTAGRAM_USER_ID_FOR_POSTING": "YOUR_INSTAGRAM_USER_ID_FOR_POSTING"
       }
     }
   }
